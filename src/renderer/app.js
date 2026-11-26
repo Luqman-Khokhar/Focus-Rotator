@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const api = window.rotator;
 const KIND_LABEL = { window: 'window', chrome: 'chrome', code: 'vs code' };
 let last = null;
-let editingMinutes = false;
+let editingInterval = false;
 
 function fmt(ms) {
   const s = Math.ceil(ms / 1000);
@@ -28,7 +28,10 @@ function render(s) {
   $('skip').disabled = s.status === 'stopped' || s.targets.length === 0;
   $('stop').disabled = s.status === 'stopped';
   $('toggle').disabled = s.targets.length === 0 && s.status === 'stopped';
-  if (!editingMinutes) $('minutes').value = Math.round(s.intervalSec / 60);
+  if (!editingInterval) {
+    $('minutes').value = Math.floor(s.intervalSec / 60);
+    $('seconds').value = s.intervalSec % 60;
+  }
 
   const ul = $('targets');
   ul.replaceChildren();
@@ -125,11 +128,14 @@ $('skip').addEventListener('click', () => api.skip());
 $('stop').addEventListener('click', () => api.stop());
 $('hide').addEventListener('click', () => api.hide());
 $('quit').addEventListener('click', () => api.quit());
-$('minutes').addEventListener('focus', () => { editingMinutes = true; });
-$('minutes').addEventListener('blur', () => { editingMinutes = false; });
-$('minutes').addEventListener('change', () => {
-  const m = Number($('minutes').value);
-  if (Number.isFinite(m) && m >= 1) api.setInterval(Math.round(m * 60));
+['minutes', 'seconds'].forEach((id) => {
+  $(id).addEventListener('focus', () => { editingInterval = true; });
+  $(id).addEventListener('blur', () => { editingInterval = false; });
+  $(id).addEventListener('change', () => {
+    const m = Math.max(0, Math.floor(Number($('minutes').value) || 0));
+    const s = Math.min(59, Math.max(0, Math.floor(Number($('seconds').value) || 0)));
+    api.setInterval(m * 60 + s); // main clamps to 5s..24h
+  });
 });
 
 api.onState(render);
