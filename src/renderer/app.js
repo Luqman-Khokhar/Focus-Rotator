@@ -66,13 +66,13 @@ function pickerMsg(text, isError) {
   $('picker-msg').className = 'msg' + (isError ? ' error' : '');
   $('picker-msg').hidden = false;
 }
-function addPickRow(kindLabel, name, onPick) {
+function addPickRow(kindLabel, name, onPick, keepOpen) {
   const li = el('li', 'item');
   li.appendChild(el('span', 'kind', kindLabel));
   li.appendChild(el('span', 'name', name));
   const b = el('button', 'btn small', 'Add');
   b.setAttribute('aria-label', 'Add ' + name);
-  b.addEventListener('click', async () => { await onPick(); $('picker').hidden = true; });
+  b.addEventListener('click', async () => { await onPick(); if (!keepOpen) $('picker').hidden = true; });
   li.appendChild(b);
   $('picker-list').appendChild(li);
 }
@@ -94,10 +94,24 @@ $('add-chrome').addEventListener('click', async () => {
   try {
     const ps = await api.chromeProfiles();
     if (!ps.length) return pickerMsg('No Chrome profiles found.', true);
-    ps.forEach((p) => addPickRow('chrome', p.name + ' (' + p.dir + ')', () =>
-      api.addTarget({ kind: 'chrome', label: 'Chrome: ' + p.name, value: p.dir })));
+    ps.forEach((p) => addPickRow('chrome', p.name + ' (' + p.dir + ')', async () => {
+      await pickChromeWindow(p);
+    }, true));
   } catch (_) { pickerMsg('Could not read Chrome profiles.', true); }
 });
+
+// step 2: bind the profile to its already-open window so the switch raises it instead of opening a new one
+async function pickChromeWindow(p) {
+  openPicker('Which window is "' + p.name + '"?');
+  pickerMsg('Loading...');
+  const base = { kind: 'chrome', label: 'Chrome: ' + p.name, value: p.dir };
+  let wins = [];
+  try { wins = (await api.listWindows()).filter((w) => /chrom/i.test(w.wclass)); } catch (_) { /* fall through to launch-only */ }
+  $('picker-msg').hidden = wins.length > 0;
+  if (!wins.length) pickerMsg('No open Chrome windows found. Open the profile first, or add it as launch-only.', true);
+  wins.forEach((w) => addPickRow('window', w.title, () => api.addTarget({ ...base, wclass: w.wclass, wid: w.wid })));
+  addPickRow('launch', 'None - launch profile (may open a new window)', () => api.addTarget(base));
+}
 
 $('add-code').addEventListener('click', async () => {
   const folder = await api.pickFolder();

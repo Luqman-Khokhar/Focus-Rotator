@@ -50,13 +50,24 @@ function launchChrome(profileDir) {
   return run('google-chrome', ['--profile-directory=' + profileDir]).then((r) => r.ok);
 }
 
+// Chrome gives no per-window profile hint on X11, so the user binds a window to the profile.
+// Bound window gone (closed / Chrome restarted) -> fall back to launching the profile.
+async function raiseChrome(t) {
+  if (t.wid) {
+    const all = await listWindows();
+    const hit = all.find((w) => w.wid === t.wid && /chrom/i.test(w.wclass));
+    if (hit && (await run('wmctrl', ['-i', '-a', hit.wid])).ok) return true;
+  }
+  return launchChrome(t.value);
+}
+
 function launchCode(folder) {
   return run('code', [folder]).then((r) => r.ok);
 }
 
 async function raise(t) {
   if (t.kind === 'window') return raiseWindow(t);
-  if (t.kind === 'chrome') return launchChrome(t.value);
+  if (t.kind === 'chrome') return raiseChrome(t);
   if (t.kind === 'code') return launchCode(t.value);
   return false;
 }

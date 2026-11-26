@@ -51,6 +51,16 @@ test('parseWindows drops panels, keeps titles with spaces', () => {
   assert.deepStrictEqual(w[0], { wid: '0x02', desktop: 0, wclass: 'Navigator.Google-chrome', title: 'My Tab - Google Chrome' });
 });
 
+test('store keeps wid for chrome targets', () => {
+  const os = require('os'); const path = require('path'); const fs = require('fs');
+  const { createStore } = require('../src/store');
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fr-')), 's.json');
+  const st = createStore(f);
+  const t = st.add({ kind: 'chrome', label: 'Chrome: A', value: 'Profile 1', wclass: 'google-chrome.Google-chrome', wid: '0x03e00016' });
+  assert.strictEqual(t.wid, '0x03e00016');
+  assert.strictEqual(createStore(f).get().targets[0].wid, '0x03e00016');
+});
+
 test('clampSec bounds', () => {
   assert.strictEqual(clampSec(1), 5);
   assert.strictEqual(clampSec('abc'), 180);
