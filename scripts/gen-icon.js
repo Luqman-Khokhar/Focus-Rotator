@@ -3,16 +3,17 @@
 const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
-const N = 128;
+const N = 512;
+const K = N / 128; // art is designed on a 128 grid
 const raw = Buffer.alloc((N * 4 + 1) * N);
 for (let y = 0; y < N; y++) {
   raw[y * (N * 4 + 1)] = 0;
   for (let x = 0; x < N; x++) {
     const r = Math.hypot(x - N / 2 + 0.5, y - N / 2 + 0.5);
     let c = [0, 0, 0, 0];
-    if (r <= 60) c = [255, 255, 255, 255];
-    if (r <= 46) c = [20, 22, 26, 255];
-    if (r <= 14) c = [255, 255, 255, 255];
+    if (r <= 60 * K) c = [255, 255, 255, 255];
+    if (r <= 46 * K) c = [20, 22, 26, 255];
+    if (r <= 14 * K) c = [255, 255, 255, 255];
     const o = y * (N * 4 + 1) + 1 + x * 4;
     raw[o] = c[0]; raw[o + 1] = c[1]; raw[o + 2] = c[2]; raw[o + 3] = c[3];
   }

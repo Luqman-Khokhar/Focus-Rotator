@@ -10,9 +10,42 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --linux deb AppImage"
   },
   "devDependencies": {
-    "electron": "^45.5.0"
+    "electron": "^45.5.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "app.focusrotator.desktop",
+    "productName": "Focus Rotator",
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "assets/icon.png",
+      "synopsis": "Rotate focus across your projects on a timer",
+      "executableName": "focus-rotator",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "focus-rotator"
+        }
+      }
+    },
+    "deb": {
+      "maintainer": "Luqman Khokhar <Luqman-Khokhar@users.noreply.github.com>",
+      "depends": [
+        "wmctrl",
+        "xdotool"
+      ]
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ]
   }
 }
