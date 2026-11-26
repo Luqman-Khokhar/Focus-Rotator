@@ -12,7 +12,7 @@ function clean(t) {
   const value = String(t.value || '').trim().slice(0, 500);
   if (!label || !value) return null;
   const out = { id: String(t.id || Date.now() + Math.random().toString(36).slice(2, 6)), kind: t.kind, label, value };
-  if (t.kind === 'window') {
+  if (t.kind === 'window' || t.kind === 'chrome') {
     out.wclass = String(t.wclass || '').trim().slice(0, 120);
     out.wid = String(t.wid || '').trim().slice(0, 20);
   }
