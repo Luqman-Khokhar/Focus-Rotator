@@ -28,6 +28,15 @@ test('pause keeps remaining time, resume continues', () => {
   assert.deepStrictEqual(fired, [0]);
 });
 
+test('snapshot exposes endAt only while running', () => {
+  const { s, adv } = make();
+  assert.strictEqual(s.snapshot().endAt, 0);
+  s.start(); adv(1000);
+  assert.strictEqual(s.snapshot().endAt, 10000);
+  s.pause();
+  assert.strictEqual(s.snapshot().endAt, 0);
+});
+
 test('stop resets; skip fires now; no targets never fires', () => {
   const a = make(); a.s.start(); a.adv(3000); a.s.stop();
   assert.strictEqual(a.s.snapshot().remainingMs, 10000);

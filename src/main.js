@@ -1,27 +1,28 @@
 'use strict';
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const { Scheduler } = require('./scheduler');
 const { createStore } = require('./store');
 const { raise, listWindows, chromeProfiles } = require('./switcher');
 
+// Low-footprint switches: UI is plain DOM, no GPU needed; cap renderer JS heap.
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=32');
 const APP_TITLE = 'Focus Rotator';
 let win = null;
 let tray = null;
 let store = null;
 let scheduler = null;
+let timer = null;
 let quitting = false;
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => showWindow());
 
+// The window is created on demand and destroyed when hidden, so the renderer
+// (and GPU) processes cost nothing while the app sits in the tray.
 function showWindow() {
-  if (!win) return;
-  win.show();
-  win.focus();
-}
-
-function createWindow() {
+  if (win) { win.show(); win.focus(); return; }
   win = new BrowserWindow({
     title: APP_TITLE,
     width: 340,
@@ -37,20 +38,28 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
+  win.on('closed', () => { win = null; rebuildTray(); });
+  rebuildTray();
 }
 
 function state() {
-  const s = store.get();
-  return { ...scheduler.snapshot(), targets: s.targets };
+  return { ...scheduler.snapshot(), targets: store.get().targets };
 }
 
-function push() {
-  if (win && !win.isDestroyed()) win.webContents.send('state', state());
+// Single place that reacts to any change: re-arm the one timer, update UI + tray.
+function changed() {
+  clearTimeout(timer);
+  timer = null;
+  if (scheduler.status === 'running') {
+    const delay = Math.max(0, scheduler.endAt - Date.now()) + 5;
+    timer = setTimeout(() => { scheduler.tick(); changed(); }, delay);
+  }
+  if (win) win.webContents.send('state', state());
   rebuildTray();
 }
 
@@ -59,13 +68,13 @@ function rebuildTray() {
   const st = scheduler.status;
   tray.setToolTip(APP_TITLE + ' - ' + st);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: win && win.isVisible() ? 'Hide window' : 'Show / edit', click: () => (win.isVisible() ? win.hide() : showWindow()) },
+    { label: win ? 'Hide window' : 'Show / edit', click: () => (win ? win.close() : showWindow()) },
     { type: 'separator' },
     st === 'running'
-      ? { label: 'Pause', click: () => { scheduler.pause(); push(); } }
-      : { label: st === 'paused' ? 'Resume' : 'Start', click: () => { scheduler.start(); push(); } },
-    { label: 'Switch now', enabled: st !== 'stopped', click: () => { scheduler.skip(); push(); } },
-    { label: 'Stop', enabled: st !== 'stopped', click: () => { scheduler.stop(); push(); } },
+      ? { label: 'Pause', click: () => { scheduler.pause(); changed(); } }
+      : { label: st === 'paused' ? 'Resume' : 'Start', click: () => { scheduler.start(); changed(); } },
+    { label: 'Switch now', enabled: st !== 'stopped', click: () => { scheduler.skip(); changed(); } },
+    { label: 'Stop', enabled: st !== 'stopped', click: () => { scheduler.stop(); changed(); } },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));
@@ -74,7 +83,7 @@ function rebuildTray() {
 function createTray() {
   const img = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon.png')).resize({ width: 22, height: 22 });
   tray = new Tray(img);
-  tray.on('click', () => (win.isVisible() ? win.hide() : showWindow()));
+  tray.on('click', () => (win ? win.close() : showWindow()));
   rebuildTray();
 }
 
@@ -82,22 +91,22 @@ function str(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
 
 function registerIpc() {
   ipcMain.handle('state:get', () => state());
-  ipcMain.handle('timer:start', () => { scheduler.start(); push(); });
-  ipcMain.handle('timer:pause', () => { scheduler.pause(); push(); });
-  ipcMain.handle('timer:stop', () => { scheduler.stop(); push(); });
-  ipcMain.handle('timer:skip', () => { scheduler.skip(); push(); });
-  ipcMain.handle('interval:set', (_e, sec) => { scheduler.setInterval(store.setIntervalSec(sec)); push(); });
+  ipcMain.handle('timer:start', () => { scheduler.start(); changed(); });
+  ipcMain.handle('timer:pause', () => { scheduler.pause(); changed(); });
+  ipcMain.handle('timer:stop', () => { scheduler.stop(); changed(); });
+  ipcMain.handle('timer:skip', () => { scheduler.skip(); changed(); });
+  ipcMain.handle('interval:set', (_e, sec) => { scheduler.setInterval(store.setIntervalSec(sec)); changed(); });
   ipcMain.handle('targets:add', (_e, t) => {
     const added = store.add({ kind: str(t && t.kind, 10), label: str(t && t.label, 80), value: str(t && t.value, 500), wclass: str(t && t.wclass, 120), wid: str(t && t.wid, 20) });
-    push(); return !!added;
+    changed(); return !!added;
   });
-  ipcMain.handle('targets:remove', (_e, id) => { const i = store.remove(str(id, 60)); if (i >= 0) scheduler.targetRemoved(i); push(); });
+  ipcMain.handle('targets:remove', (_e, id) => { const i = store.remove(str(id, 60)); if (i >= 0) scheduler.targetRemoved(i); changed(); });
   ipcMain.handle('targets:move', (_e, id, dir) => {
     const s = store.get().targets;
     const i = s.findIndex((t) => t.id === id);
     const act = scheduler.activeIndex >= 0 ? s[scheduler.activeIndex] : null;
     if (store.move(str(id, 60), Number(dir) < 0 ? -1 : 1) && act) scheduler.activeIndex = store.get().targets.findIndex((t) => t.id === act.id);
-    push(); return i;
+    changed(); return i;
   });
   ipcMain.handle('windows:list', async () => (await listWindows()).filter((w) => w.title && w.title !== APP_TITLE));
   ipcMain.handle('chrome:profiles', () => chromeProfiles());
@@ -105,7 +114,7 @@ function registerIpc() {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('win:hide', () => win.hide());
+  ipcMain.handle('win:hide', () => { if (win) win.close(); });
   ipcMain.handle('win:quit', () => { quitting = true; app.quit(); });
 }
 
@@ -117,10 +126,11 @@ app.whenReady().then(() => {
     onFire: (i) => { const t = store.get().targets[i]; if (t) raise(t); },
   });
   registerIpc();
-  createWindow();
   createTray();
-  setInterval(() => { scheduler.tick(); push(); }, 500);
+  showWindow();
+  // setTimeout runs on a monotonic clock that pauses during suspend: re-sync on wake.
+  powerMonitor.on('resume', () => { scheduler.tick(); changed(); });
 });
 
 app.on('before-quit', () => { quitting = true; });
-app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => { /* stay alive in tray */ });

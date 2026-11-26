@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 const api = window.rotator;
 const KIND_LABEL = { window: 'window', chrome: 'chrome', code: 'vs code' };
 let last = null;
+let clockTimer = null;
 let editingInterval = false;
 
 function fmt(ms) {
@@ -20,9 +21,20 @@ function el(tag, cls, text) {
   return e;
 }
 
+// Countdown is drawn locally from endAt; main only pushes state on change. Idles when hidden.
+function tickClock() {
+  clearTimeout(clockTimer);
+  if (!last) return;
+  const running = last.status === 'running';
+  const rem = running ? Math.max(0, last.endAt - Date.now()) : last.remainingMs;
+  $('clock').textContent = fmt(rem);
+  if (running && !document.hidden) clockTimer = setTimeout(tickClock, (rem % 1000) + 20);
+}
+document.addEventListener('visibilitychange', tickClock);
+
 function render(s) {
   last = s;
-  $('clock').textContent = fmt(s.remainingMs);
+  tickClock();
   $('status').textContent = s.status === 'running' ? 'Running' : s.status === 'paused' ? 'Paused' : 'Stopped';
   $('toggle').textContent = s.status === 'running' ? 'Pause' : s.status === 'paused' ? 'Resume' : 'Start';
   $('skip').disabled = s.status === 'stopped' || s.targets.length === 0;
