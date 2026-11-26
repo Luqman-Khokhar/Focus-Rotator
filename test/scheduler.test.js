@@ -70,6 +70,30 @@ test('store keeps wid for chrome targets', () => {
   assert.strictEqual(createStore(f).get().targets[0].wid, '0x03e00016');
 });
 
+test('matchesTarget only accepts the intended window', () => {
+  const { matchesTarget, KEYS } = require('../src/switcher');
+  const chromeW = { wid: '0x1', wclass: 'google-chrome.Google-chrome', title: 'x' };
+  assert.ok(matchesTarget(chromeW, { kind: 'chrome', wid: '0x1' }));
+  assert.ok(!matchesTarget(chromeW, { kind: 'chrome', wid: '0x2' }));
+  assert.ok(!matchesTarget({ wid: '0x3', wclass: 'gnome-terminal.Gnome-terminal', title: 't' }, { kind: 'chrome' }));
+  assert.ok(matchesTarget({ wid: '0x4', wclass: 'code.Code', title: 'f' }, { kind: 'code' }));
+  assert.ok(matchesTarget(chromeW, { kind: 'window', wclass: 'google-chrome.Google-chrome' }));
+  assert.deepStrictEqual(Object.keys(KEYS), ['scroll', 'tab']);
+});
+
+test('store validates and persists target action', () => {
+  const os = require('os'); const path = require('path'); const fs = require('fs');
+  const { createStore } = require('../src/store');
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fr-')), 's.json');
+  const st = createStore(f);
+  const t = st.add({ kind: 'code', label: 'Code: x', value: '/tmp/x', action: 'bogus' });
+  assert.strictEqual(t.action, 'none');
+  assert.ok(st.setAction(t.id, 'tab'));
+  assert.ok(!st.setAction(t.id, 'rm -rf'));
+  assert.ok(!st.setAction('nope', 'scroll'));
+  assert.strictEqual(createStore(f).get().targets[0].action, 'tab');
+});
+
 test('clampSec bounds', () => {
   assert.strictEqual(clampSec(1), 5);
   assert.strictEqual(clampSec('abc'), 180);

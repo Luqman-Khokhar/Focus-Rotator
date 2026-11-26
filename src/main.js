@@ -100,6 +100,7 @@ function registerIpc() {
     const added = store.add({ kind: str(t && t.kind, 10), label: str(t && t.label, 80), value: str(t && t.value, 500), wclass: str(t && t.wclass, 120), wid: str(t && t.wid, 20) });
     changed(); return !!added;
   });
+  ipcMain.handle('targets:action', (_e, id, action) => { const ok = store.setAction(str(id, 60), str(action, 10)); changed(); return ok; });
   ipcMain.handle('targets:remove', (_e, id) => { const i = store.remove(str(id, 60)); if (i >= 0) scheduler.targetRemoved(i); changed(); });
   ipcMain.handle('targets:move', (_e, id, dir) => {
     const s = store.get().targets;

@@ -4,6 +4,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 function run(cmd, args) {
   return new Promise((resolve) => {
     execFile(cmd, args, { timeout: 5000 }, (err, stdout) => resolve({ ok: !err, out: stdout || '' }));
@@ -65,11 +67,45 @@ function launchCode(folder) {
   return run('code', [folder]).then((r) => r.ok);
 }
 
-async function raise(t) {
-  if (t.kind === 'window') return raiseWindow(t);
-  if (t.kind === 'chrome') return raiseChrome(t);
-  if (t.kind === 'code') return launchCode(t.value);
+// Optional per-target action after the switch, sent as a key to the focused window.
+const KEYS = { scroll: 'Page_Down', tab: 'ctrl+Page_Down' };
+
+// Safety: only send keys when the window we meant to raise really has focus.
+function matchesTarget(w, t) {
+  if (t.kind === 'chrome') return /chrom/i.test(w.wclass) && (!t.wid || w.wid === t.wid);
+  if (t.kind === 'code') return /code/i.test(w.wclass);
+  if (t.kind === 'window') return w.wclass === t.wclass;
   return false;
 }
 
-module.exports = { raise, listWindows, chromeProfiles, parseWindows };
+async function activeWindow() {
+  const r = await run('xdotool', ['getactivewindow']);
+  if (!r.ok) return null;
+  const id = parseInt(r.out.trim(), 10);
+  return (await listWindows()).find((w) => parseInt(w.wid, 16) === id) || null;
+}
+
+async function performAction(t) {
+  const key = KEYS[t.action];
+  if (!key) return false;
+  for (let i = 0; i < 15; i++) { // wait up to ~3s for focus (VS Code may be launching)
+    await sleep(200);
+    const w = await activeWindow();
+    if (w && matchesTarget(w, t)) {
+      await sleep(150);
+      return (await run('xdotool', ['key', '--clearmodifiers', key])).ok;
+    }
+  }
+  return false;
+}
+
+async function raise(t) {
+  let ok = false;
+  if (t.kind === 'window') ok = await raiseWindow(t);
+  else if (t.kind === 'chrome') ok = await raiseChrome(t);
+  else if (t.kind === 'code') ok = await launchCode(t.value);
+  if (ok && KEYS[t.action]) await performAction(t);
+  return ok;
+}
+
+module.exports = { raise, listWindows, chromeProfiles, parseWindows, matchesTarget, KEYS };

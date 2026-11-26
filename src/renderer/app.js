@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const api = window.rotator;
 const KIND_LABEL = { window: 'window', chrome: 'chrome', code: 'vs code' };
+const ACTION_LABEL = { none: 'Nothing', scroll: 'Scroll down a page', tab: 'Next tab' };
 let last = null;
 let clockTimer = null;
 let editingInterval = false;
@@ -46,6 +47,7 @@ function render(s) {
   }
 
   const ul = $('targets');
+  const focusedId = document.activeElement && document.activeElement.id; // survive re-render
   ul.replaceChildren();
   $('empty').hidden = s.targets.length > 0;
   s.targets.forEach((t, i) => {
@@ -65,8 +67,24 @@ function render(s) {
     li.appendChild(mk('↑', 'Move up', () => api.moveTarget(t.id, -1), i === 0));
     li.appendChild(mk('↓', 'Move down', () => api.moveTarget(t.id, 1), i === s.targets.length - 1));
     li.appendChild(mk('×', 'Remove', () => api.removeTarget(t.id)));
+    const row = el('div', 'action-row');
+    const lab = el('label', null, 'After switch');
+    const sel = el('select');
+    sel.id = 'act-' + t.id;
+    lab.htmlFor = sel.id;
+    Object.keys(ACTION_LABEL).forEach((k) => {
+      const o = el('option', null, ACTION_LABEL[k]);
+      o.value = k;
+      sel.appendChild(o);
+    });
+    sel.value = t.action || 'none';
+    sel.addEventListener('change', () => api.setAction(t.id, sel.value));
+    row.appendChild(lab);
+    row.appendChild(sel);
+    li.appendChild(row);
     ul.appendChild(li);
   });
+  if (focusedId) { const f = document.getElementById(focusedId); if (f) f.focus(); }
 }
 
 function openPicker(title) {

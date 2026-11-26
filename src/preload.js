@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('rotator', {
   setInterval: call('interval:set'),
   addTarget: call('targets:add'),
   removeTarget: call('targets:remove'),
+  setAction: call('targets:action'),
   moveTarget: call('targets:move'),
   listWindows: call('windows:list'),
   chromeProfiles: call('chrome:profiles'),
