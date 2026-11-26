@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus Rotator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <h1>Focus Rotator</h1>
+  <div class="bar-actions">
+    <button id="hide" class="icon-btn" aria-label="Hide to tray" title="Hide to tray">–</button>
+    <button id="quit" class="icon-btn" aria-label="Quit" title="Quit">×</button>
+  </div>
+</header>
+<main>
+  <section class="timer" aria-label="Timer">
+    <div id="clock" class="clock" role="timer" aria-live="off">03:00</div>
+    <div id="status" class="status">Stopped</div>
+    <div class="controls">
+      <button id="toggle" class="btn primary">Start</button>
+      <button id="skip" class="btn">Switch now</button>
+      <button id="stop" class="btn">Stop</button>
+    </div>
+    <div class="interval">
+      <label for="minutes">Switch every</label>
+      <input id="minutes" type="number" min="1" max="1440" step="1" inputmode="numeric">
+      <span>min</span>
+    </div>
+  </section>
+
+  <section class="targets" aria-label="Targets">
+    <div class="targets-head">
+      <h2>Targets</h2>
+      <div class="add">
+        <button id="add-window" class="btn small">+ Window</button>
+        <button id="add-chrome" class="btn small">+ Chrome</button>
+        <button id="add-code" class="btn small">+ VS Code</button>
+      </div>
+    </div>
+    <div id="picker" class="picker" hidden>
+      <div class="picker-head"><span id="picker-title"></span><button id="picker-close" class="icon-btn" aria-label="Close picker">×</button></div>
+      <p id="picker-msg" class="msg" hidden></p>
+      <ul id="picker-list" class="list"></ul>
+    </div>
+    <ul id="targets" class="list"></ul>
+    <p id="empty" class="msg" hidden>No targets yet. Add a window, Chrome profile or VS Code folder to start rotating.</p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
