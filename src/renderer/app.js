@@ -2,7 +2,9 @@
 const $ = (id) => document.getElementById(id);
 const api = window.rotator;
 const KIND_LABEL = { window: 'window', chrome: 'chrome', code: 'vs code' };
+const ACTION_LABEL = { none: 'Nothing', scroll: 'Scroll down a page', tab: 'Next tab' };
 let last = null;
+let clockTimer = null;
 let editingInterval = false;
 
 function fmt(ms) {
@@ -20,9 +22,20 @@ function el(tag, cls, text) {
   return e;
 }
 
+// Countdown is drawn locally from endAt; main only pushes state on change. Idles when hidden.
+function tickClock() {
+  clearTimeout(clockTimer);
+  if (!last) return;
+  const running = last.status === 'running';
+  const rem = running ? Math.max(0, last.endAt - Date.now()) : last.remainingMs;
+  $('clock').textContent = fmt(rem);
+  if (running && !document.hidden) clockTimer = setTimeout(tickClock, (rem % 1000) + 20);
+}
+document.addEventListener('visibilitychange', tickClock);
+
 function render(s) {
   last = s;
-  $('clock').textContent = fmt(s.remainingMs);
+  tickClock();
   $('status').textContent = s.status === 'running' ? 'Running' : s.status === 'paused' ? 'Paused' : 'Stopped';
   $('toggle').textContent = s.status === 'running' ? 'Pause' : s.status === 'paused' ? 'Resume' : 'Start';
   $('skip').disabled = s.status === 'stopped' || s.targets.length === 0;
@@ -34,6 +47,7 @@ function render(s) {
   }
 
   const ul = $('targets');
+  const focusedId = document.activeElement && document.activeElement.id; // survive re-render
   ul.replaceChildren();
   $('empty').hidden = s.targets.length > 0;
   s.targets.forEach((t, i) => {
@@ -53,8 +67,24 @@ function render(s) {
     li.appendChild(mk('↑', 'Move up', () => api.moveTarget(t.id, -1), i === 0));
     li.appendChild(mk('↓', 'Move down', () => api.moveTarget(t.id, 1), i === s.targets.length - 1));
     li.appendChild(mk('×', 'Remove', () => api.removeTarget(t.id)));
+    const row = el('div', 'action-row');
+    const lab = el('label', null, 'After switch');
+    const sel = el('select');
+    sel.id = 'act-' + t.id;
+    lab.htmlFor = sel.id;
+    Object.keys(ACTION_LABEL).forEach((k) => {
+      const o = el('option', null, ACTION_LABEL[k]);
+      o.value = k;
+      sel.appendChild(o);
+    });
+    sel.value = t.action || 'none';
+    sel.addEventListener('change', () => api.setAction(t.id, sel.value));
+    row.appendChild(lab);
+    row.appendChild(sel);
+    li.appendChild(row);
     ul.appendChild(li);
   });
+  if (focusedId) { const f = document.getElementById(focusedId); if (f) f.focus(); }
 }
 
 function openPicker(title) {

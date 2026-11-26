@@ -63,7 +63,11 @@ class Scheduler {
 
   snapshot() {
     const remainingMs = this.status === 'running' ? Math.max(0, this.endAt - this.now()) : this.remainingMs;
-    return { status: this.status, intervalSec: this.intervalSec, remainingMs, activeIndex: this.activeIndex };
+    return {
+      status: this.status, intervalSec: this.intervalSec, remainingMs,
+      endAt: this.status === 'running' ? this.endAt : 0,
+      activeIndex: this.activeIndex,
+    };
   }
 }
 
